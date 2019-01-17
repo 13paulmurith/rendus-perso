@@ -1,0 +1,51 @@
+version: "2"
+
+networks:
+  web:
+    driver: bridge
+
+services:
+    web:
+        build:
+           context: .
+           dockerfile: api
+        ports:
+           - "8001:80"
+        restart: always
+        volumes:
+           - /home/docker/api/www:/var/www/
+           - /home/docker/api/apache-config.conf:/etc/apache2/sites-enabled/000-default.conf
+        depends_on:
+           - db_api
+        networks:
+           - web
+
+    db_api:
+        image: mariadb:10.2.18
+        restart: always
+        ports:
+            - "3307:3306"
+        networks:
+            - web
+        volumes:
+            - /home/docker/api/db:/var/lib/mysqld:rw
+        environment:
+            - MYSQL_ROOT_PASSWORD=johnny2k18
+            - MYSQL_DATABASE=api
+            - MYSQL_USER=api
+            - MYSQL_PASSWORD=johnny2k18
+
+    phpmyadmin:
+        image: phpmyadmin/phpmyadmin
+        restart: always
+        networks:
+            - web
+        depends_on:
+            - db_api
+        ports:
+            - "8000:80"
+        environment:
+            - MYSQL_USER=api
+            - MYSQL_PASSWORD=johnny2k18
+            - MYSQL_ROOT_PASSWORD=johnny2k18
+            - PMA_HOST=db_api
