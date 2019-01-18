@@ -1,0 +1,54 @@
+FROM debian:9.6
+
+RUN apt-get update -q -q && \
+apt-get --yes --force-yes install postfix && \
+apt-get --yes --force-yes --no-install-recommends install rsyslog && \
+apt-get install --yes --force-yes libsasl2-2 && \
+apt-get install --yes --force-yes ca-certificates && \
+apt-get install --yes --force-yes libsasl2-modules && \
+apt-get install --yes --force-yes wget
+
+RUN wget https://www.thawte.com/roots/thawte_Premium_Server_CA.pem
+RUN mv thawte_Premium_Server_CA.pem Thawte_Premium_Server_CA.pem
+RUN cat Thawte_Premium_Server_CA.pem | tee -a /etc/postfix/cacert.pem
+
+RUN echo mail > /etc/hostname
+ADD etc-hosts.txt /etc/hosts
+RUN chown root:root /etc/hosts
+
+ADD sasl_passwd.txt /etc/postfix/sasl_passwd
+RUN chmod 777 /etc/postfix/sasl_passwd
+
+
+RUN echo postfix postfix/main_mailer_type string "'Internet Site'" | debconf-set-selections && \
+ echo postfix postfix/mynetworks string "127.0.0.0/8" | debconf-set-selections && \
+ echo postfix postfix/mailname string relay.panz.ovh | debconf-set-selections
+
+RUN postmap /etc/postfix/sasl_passwd
+RUN chmod 777 /etc/postfix/sasl_passwd.db
+
+
+RUN \
+postconf -e inet_interfaces="loopback-only" &&\
+ postconf -e myhostname="relay.panz.ovh" &&\
+ postconf -e mydestination="$myhostname, relay.panz.ovh, localhost.relay.panz.ovh, localhost.localdomain" &&\
+ postconf -e inet_protocols=ipv4 &&\
+ postconf -e mail_spool_directory="/var/spool/mail" &&\
+ postconf -e mailbox_command="" &&\
+ postconf -e relayhost="[smtp.gmail.com]:587" &&\
+ postconf -e smtp_sasl_auth_enable="yes" &&\
+ postconf -e smtp_sasl_password_maps="hash:/etc/postfix/sasl_passwd" &&\
+ postconf -e smtp_sasl_security_options="noanonymous" &&\
+ postconf -e smtp_tls_CAfile="/etc/postfix/cacert.pem" &&\
+ postconf -e smtp_use_tls="yes" &&\
+ postconf -e smtpd_use_tls="yes" &&\
+ postconf -M submission/inet="submission   inet   n   -   n   -   -   smtpd"
+
+
+RUN useradd -s /bin/bash admin
+RUN mkdir /var/spool/mail/admin
+RUN chown admin:mail /var/spool/mail/admin
+
+ADD etc-aliases.txt /etc/aliases
+RUN chown root:root /etc/aliases
+RUN newaliases
